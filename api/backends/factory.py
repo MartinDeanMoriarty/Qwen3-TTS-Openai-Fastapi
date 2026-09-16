@@ -111,6 +111,10 @@ async def initialize_backend(warmup: bool = False) -> TTSBackend:
     
     # Initialize the backend
     await backend.initialize()
+
+    # Start the idle clock at load time so auto-unload works after startup
+    # even if no TTS request has been made yet.
+    update_activity()
     
     # Perform warmup if requested
     if warmup:
@@ -181,8 +185,10 @@ async def _auto_unload_checker() -> None:
             if _backend_instance is None or not _backend_instance.is_ready():
                 continue
             
-            # Skip if no activity yet (model just loaded, no requests)
+            # Model is loaded but the idle clock never started (startup gap).
+            # Start it now instead of holding VRAM indefinitely.
             if _last_activity_time == 0:
+                update_activity()
                 continue
             
             inactivity = get_inactivity_seconds()
