@@ -5,6 +5,7 @@ Audio encoding service for TTS API.
 Handles conversion of raw audio to various formats (mp3, opus, aac, flac, wav, pcm).
 """
 
+import asyncio
 import io
 import logging
 import struct
@@ -182,22 +183,85 @@ def encode_audio(
         return convert_to_wav(audio, sample_rate)
 
 
+def _pcm16(audio: np.ndarray) -> bytes:
+    return (np.clip(audio.astype(np.float32), -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+
+
+def _streaming_wav_header(sample_rate: int) -> bytes:
+    """WAV header with unknown length (0xFFFFFFFF), as streaming players expect."""
+    return (
+        b"RIFF" + struct.pack("<I", 0xFFFFFFFF) + b"WAVE"
+        + b"fmt " + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
+        + b"data" + struct.pack("<I", 0xFFFFFFFF)
+    )
+
+
+_FFMPEG_STREAM_ARGS = {
+    "mp3": ["-f", "mp3", "-b:a", "192k"],
+    "opus": ["-f", "ogg", "-c:a", "libopus", "-b:a", "128k"],
+    "aac": ["-f", "adts", "-c:a", "aac", "-b:a", "192k"],
+    "flac": ["-f", "flac"],
+}
+
+
 async def encode_audio_streaming(
-    audio_generator,
+    audio_chunks,
     format: AudioFormat = "mp3",
     sample_rate: int = DEFAULT_SAMPLE_RATE,
 ):
     """
-    Async generator that encodes audio chunks to the specified format.
-    
+    Encode an async stream of float audio chunks into one continuous audio stream.
+
+    PCM and WAV are written directly. Compressed formats go through a single
+    ffmpeg process for the whole stream: encoding chunks separately would put
+    encoder padding, i.e. small gaps, at every seam.
+
     Args:
-        audio_generator: Async generator yielding audio chunks as numpy arrays
+        audio_chunks: Async iterator of float32 numpy chunks in [-1, 1]
         format: Target audio format
         sample_rate: Sample rate in Hz
-    
+
     Yields:
-        Encoded audio chunks
+        Encoded bytes as they become available
     """
-    async for audio_chunk in audio_generator:
-        if audio_chunk is not None and len(audio_chunk) > 0:
-            yield encode_audio(audio_chunk, format, sample_rate)
+    if format in ("pcm", "wav"):
+        if format == "wav":
+            yield _streaming_wav_header(sample_rate)
+        async for chunk in audio_chunks:
+            if len(chunk):
+                yield _pcm16(chunk)
+        return
+
+    # Without the probing/buffering flags ffmpeg sat on the first 160 ms of
+    # input for over 2 s; with them the first bytes come out after ~50 ms.
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-probesize", "32", "-analyzeduration", "0", "-fflags", "nobuffer",
+        "-f", "s16le", "-ar", str(sample_rate), "-ac", "1", "-i", "pipe:0",
+        *_FFMPEG_STREAM_ARGS[format], "-flush_packets", "1", "pipe:1",
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+    )
+
+    async def feed():
+        try:
+            async for chunk in audio_chunks:
+                if len(chunk):
+                    process.stdin.write(_pcm16(chunk))
+                    await process.stdin.drain()
+        finally:
+            process.stdin.close()
+
+    feeder = asyncio.create_task(feed())
+    try:
+        while True:
+            data = await process.stdout.read(4096)
+            if not data:
+                break
+            yield data
+        await feeder  # re-raise generation errors
+    finally:
+        if not feeder.done():
+            feeder.cancel()
+        if process.returncode is None:
+            process.kill()
+            await process.wait()

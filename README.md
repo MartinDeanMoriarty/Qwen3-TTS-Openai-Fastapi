@@ -19,7 +19,9 @@ An **OpenAI-compatible FastAPI server** for **Qwen3-TTS**, enabling drop-in repl
 | **Voice Cloning** | Add your own voices with 3-10 second samples |
 | **10+ Languages** | English, Chinese, Japanese, Korean, German, French, Spanish, Russian, Portuguese, Italian |
 | **Multiple Formats** | MP3, Opus, AAC, FLAC, WAV, PCM |
-| **GPU Optimized** | Flash Attention 2, torch.compile, TF32, BFloat16 |
+| **Fast** | CUDA-graph engine with torch.compile and int8 weights: ~7x real time, a short sentence in ~0.35 s on an RTX 4070 Ti |
+| **Streaming** | `stream: true` / `stream_format` (`audio`, `sse`); first audio after ~40 ms (WAV/PCM) |
+| **Language detection** | German/English detected from the text when the client sends no language |
 
 ## Quick Start
 
@@ -67,17 +69,27 @@ docker compose logs -f qwen3-tts-gpu
 
 ### Environment Variables
 
+Defaults as set in `docker-compose.yml`:
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8881` | Server port |
-| `TTS_BACKEND` | `official` | Backend engine |
+| `TTS_BACKEND` | `fast` | `fast` (CUDA graphs, GPU) or `official` (transformers `generate()`) |
+| `TTS_COMPILE` | `true` | torch.compile the decode step (first start ~2.5 min, then cached) |
+| `TTS_QUANTIZE` | `int8` | `int8` weights or `none` (bf16) |
 | `TTS_MODEL_NAME` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Model to use |
-| `TTS_INACTIVITY_TIMEOUT_MINUTES` | `15` | Auto-unload after idle (0=disabled) |
+| `TTS_INACTIVITY_TIMEOUT_MINUTES` | `0` | Auto-unload after idle (0=disabled) |
+| `TTS_DEFAULT_LANGUAGE` | `Auto` | Language when request, model suffix and text leave it open |
 | `VOICE_SAMPLES_DIR` | `/app/voice-samples` | Custom voice samples path |
+
+More knobs (streaming chunk sizes, segment length, KV length) in
+[OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md).
 
 ## VRAM Management
 
-The model uses ~4.5GB VRAM. Auto-unload frees memory when idle:
+The server uses ~3.7 GB VRAM (1.7B model, int8 weights). Unloading frees all
+but the CUDA context (~0.4 GB); reload plus the first request takes ~3.5 s.
+Auto-unload frees memory when idle:
 
 ```bash
 # Check status (shows idle time, countdown)
@@ -112,7 +124,8 @@ curl -X POST http://localhost:8881/admin/reload
 ## Documentation
 
 - **[INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)** - Detailed integration examples (FastAPI, Node.js, Gradio, Home Assistant, Open WebUI)
-- **[OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md)** - GPU optimization details
+- **[OPTIMIZATION_GUIDE.md](OPTIMIZATION_GUIDE.md)** - What makes it fast and how to switch it
+- **[docs/PERFORMANCE.md](docs/PERFORMANCE.md)** - Measurements: what was slow, what changed, quality checks
 
 ## Credits
 

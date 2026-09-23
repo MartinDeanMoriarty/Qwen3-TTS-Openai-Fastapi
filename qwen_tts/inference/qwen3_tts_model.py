@@ -15,6 +15,7 @@
 # limitations under the License.
 import base64
 import io
+import os
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -35,6 +36,19 @@ AudioLike = Union[
 ]
 
 MaybeList = Union[Any, List[Any]]
+
+
+def _cached_snapshot_dir(name_or_path: str) -> Optional[str]:
+    """Local snapshot directory of a hub model if it is fully cached, else None."""
+    if os.path.isdir(name_or_path):
+        return name_or_path
+    try:
+        from huggingface_hub import snapshot_download
+
+        path = snapshot_download(name_or_path, local_files_only=True)
+    except Exception:
+        return None
+    return path if os.path.isfile(os.path.join(path, "speech_tokenizer", "config.json")) else None
 
 
 @dataclass
@@ -109,13 +123,23 @@ class Qwen3TTSModel:
         AutoModel.register(Qwen3TTSConfig, Qwen3TTSForConditionalGeneration)
         AutoProcessor.register(Qwen3TTSConfig, Qwen3TTSProcessor)
 
-        model = AutoModel.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        # Prefer the cached snapshot on disk. With a hub id, transformers 4.57
+        # asks the Hub API on every load whether the tokenizer is a Mistral one,
+        # which costs a round trip and makes offline loading impossible.
+        local_dir = _cached_snapshot_dir(pretrained_model_name_or_path)
+        source = local_dir or pretrained_model_name_or_path
+
+        model = AutoModel.from_pretrained(source, **kwargs)
         if not isinstance(model, Qwen3TTSForConditionalGeneration):
             raise TypeError(
                 f"AutoModel returned {type(model)}, expected Qwen3TTSForConditionalGeneration. "
             )
 
-        processor = AutoProcessor.from_pretrained(pretrained_model_name_or_path, fix_mistral_regex=True,)
+        # From a hub id the Mistral regex patch never applies to Qwen. From a
+        # local directory transformers 4.57.3 would apply it when asked to and
+        # swap Qwen's pre-tokenizer regex for Mistral's, so only ask for it in
+        # the hub-id case; either way the Qwen regex stays in place.
+        processor = AutoProcessor.from_pretrained(source, fix_mistral_regex=local_dir is None)
 
         generate_defaults = model.generate_config
         return cls(model=model, processor=processor, generate_defaults=generate_defaults)
@@ -423,7 +447,11 @@ class Qwen3TTSModel:
             ref_wavs_for_code.append(wav)
             ref_sr_for_code.append(sr)
 
-        if len(set(ref_sr_for_code)) == 1:
+        if all(xvec_list):
+            # x-vector mode throws the reference codes away, so skip the
+            # speech-tokenizer encoder pass entirely.
+            ref_codes = [None] * len(normalized)
+        elif len(set(ref_sr_for_code)) == 1:
             enc = self.model.speech_tokenizer.encode(ref_wavs_for_code, sr=ref_sr_for_code[0])
             ref_codes = enc.audio_codes
         else:
@@ -552,7 +580,31 @@ class Qwen3TTSModel:
                 f"tts_model_type: {self.model.tts_model_type}\n"
                 "does not support generate_voice_clone, Please check Model Card or Readme for more details."
             )
-        
+
+        inputs = self._prepare_voice_clone(
+            text=text,
+            language=language,
+            ref_audio=ref_audio,
+            ref_text=ref_text,
+            x_vector_only_mode=x_vector_only_mode,
+            voice_clone_prompt=voice_clone_prompt,
+            non_streaming_mode=non_streaming_mode,
+        )
+        gen_kwargs = self._merge_generate_kwargs(**kwargs)
+        talker_codes_list, _ = self.model.generate(**inputs, **gen_kwargs)
+        return self._decode_codes(talker_codes_list, inputs["voice_clone_prompt"].get("ref_code", None))
+
+    def _prepare_voice_clone(
+        self,
+        text: Union[str, List[str]],
+        language: Union[str, List[str]] = None,
+        ref_audio: Optional[Union[AudioLike, List[AudioLike]]] = None,
+        ref_text: Optional[Union[str, List[Optional[str]]]] = None,
+        x_vector_only_mode: Union[bool, List[bool]] = False,
+        voice_clone_prompt: Optional[Union[Dict[str, Any], List[VoiceClonePromptItem]]] = None,
+        non_streaming_mode: bool = False,
+    ) -> Dict[str, Any]:
+        """Tokenize and validate a voice-clone request into `model.generate` inputs."""
         texts = self._ensure_list(text)
         languages = self._ensure_list(language) if isinstance(language, list) else ([language] * len(texts) if language is not None else ["Auto"] * len(texts))
         if len(languages) == 1 and len(texts) > 1:
@@ -598,20 +650,22 @@ class Qwen3TTSModel:
                     ref_tok = self._tokenize_texts([self._build_ref_text(rt)])[0]
                     ref_ids.append(ref_tok)
 
-        gen_kwargs = self._merge_generate_kwargs(**kwargs)
-
-        talker_codes_list, _ = self.model.generate(
+        return dict(
             input_ids=input_ids,
             ref_ids=ref_ids,
             voice_clone_prompt=voice_clone_prompt_dict,
             languages=languages,
             non_streaming_mode=non_streaming_mode,
-            **gen_kwargs,
         )
 
+    def _decode_codes(
+        self,
+        talker_codes_list: List[torch.Tensor],
+        ref_code_list: Optional[List[Optional[torch.Tensor]]] = None,
+    ) -> Tuple[List[np.ndarray], int]:
+        """Decode codec frames to waveforms; ICL reference codes are prepended for context and cut off again."""
         codes_for_decode = []
         for i, codes in enumerate(talker_codes_list):
-            ref_code_list = voice_clone_prompt_dict.get("ref_code", None)
             if ref_code_list is not None and ref_code_list[i] is not None:
                 codes_for_decode.append(torch.cat([ref_code_list[i].to(codes.device), codes], dim=0))
             else:
@@ -621,7 +675,6 @@ class Qwen3TTSModel:
 
         wavs_out: List[np.ndarray] = []
         for i, wav in enumerate(wavs_all):
-            ref_code_list = voice_clone_prompt_dict.get("ref_code", None)
             if ref_code_list is not None and ref_code_list[i] is not None:
                 ref_len = int(ref_code_list[i].shape[0])
                 total_len = int(codes_for_decode[i].shape[0])
@@ -691,6 +744,19 @@ class Qwen3TTSModel:
                 "does not support generate_voice_design, Please check Model Card or Readme for more details."
             )
         
+        inputs = self._prepare_voice_design(text, instruct, language, non_streaming_mode)
+        gen_kwargs = self._merge_generate_kwargs(**kwargs)
+        talker_codes_list, _ = self.model.generate(**inputs, **gen_kwargs)
+        return self._decode_codes(talker_codes_list)
+
+    def _prepare_voice_design(
+        self,
+        text: Union[str, List[str]],
+        instruct: Union[str, List[str]],
+        language: Union[str, List[str]] = None,
+        non_streaming_mode: bool = True,
+    ) -> Dict[str, Any]:
+        """Tokenize and validate a voice-design request into `model.generate` inputs."""
         texts = self._ensure_list(text)
         languages = self._ensure_list(language) if isinstance(language, list) else ([language] * len(texts) if language is not None else ["Auto"] * len(texts))
         instructs = self._ensure_list(instruct)
@@ -714,18 +780,12 @@ class Qwen3TTSModel:
             else:
                 instruct_ids.append(self._tokenize_texts([self._build_instruct_text(ins)])[0])
 
-        gen_kwargs = self._merge_generate_kwargs(**kwargs)
-
-        talker_codes_list, _ = self.model.generate(
+        return dict(
             input_ids=input_ids,
             instruct_ids=instruct_ids,
             languages=languages,
             non_streaming_mode=non_streaming_mode,
-            **gen_kwargs,
         )
-
-        wavs, fs = self.model.speech_tokenizer.decode([{"audio_codes": c} for c in talker_codes_list])
-        return wavs, fs
 
     # custom voice model
     @torch.no_grad()
@@ -793,6 +853,20 @@ class Qwen3TTSModel:
                 "does not support generate_custom_voice, Please check Model Card or Readme for more details."
             )
 
+        inputs = self._prepare_custom_voice(text, speaker, language, instruct, non_streaming_mode)
+        gen_kwargs = self._merge_generate_kwargs(**kwargs)
+        talker_codes_list, _ = self.model.generate(**inputs, **gen_kwargs)
+        return self._decode_codes(talker_codes_list)
+
+    def _prepare_custom_voice(
+        self,
+        text: Union[str, List[str]],
+        speaker: Union[str, List[str]],
+        language: Union[str, List[str]] = None,
+        instruct: Optional[Union[str, List[str]]] = None,
+        non_streaming_mode: bool = True,
+    ) -> Dict[str, Any]:
+        """Tokenize and validate a custom-voice request into `model.generate` inputs."""
         texts = self._ensure_list(text)
         languages = self._ensure_list(language) if isinstance(language, list) else ([language] * len(texts) if language is not None else ["Auto"] * len(texts))
         speakers = self._ensure_list(speaker)
@@ -824,19 +898,13 @@ class Qwen3TTSModel:
             else:
                 instruct_ids.append(self._tokenize_texts([self._build_instruct_text(ins)])[0])
 
-        gen_kwargs = self._merge_generate_kwargs(**kwargs)
-
-        talker_codes_list, _ = self.model.generate(
+        return dict(
             input_ids=input_ids,
             instruct_ids=instruct_ids,
             languages=languages,
             speakers=speakers,
             non_streaming_mode=non_streaming_mode,
-            **gen_kwargs,
         )
-
-        wavs, fs = self.model.speech_tokenizer.decode([{"audio_codes": c} for c in talker_codes_list])
-        return wavs, fs
 
 
     def get_supported_speakers(self) -> Optional[List[str]]:

@@ -1,0 +1,16 @@
+# Runtime dependencies of the API server (GPU and CPU images).
+# torch/torchaudio are installed separately from the PyTorch index.
+transformers
+accelerate
+librosa
+soundfile
+sox
+onnxruntime
+einops
+pydub
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+inflect
+aiofiles

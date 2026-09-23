@@ -71,6 +71,11 @@ class OpenAISpeechRequest(BaseModel):
         default=False,
         description="If true, audio will be streamed as it's generated.",
     )
+    stream_format: Optional[Literal["audio", "sse"]] = Field(
+        default=None,
+        description="Streaming format: 'audio' sends raw audio bytes as they are generated, "
+        "'sse' sends server-sent events with base64 audio deltas. Setting it enables streaming.",
+    )
     language: Optional[str] = Field(
         default="Auto",
         description="Optional language code for TTS. If not provided, will auto-detect.",

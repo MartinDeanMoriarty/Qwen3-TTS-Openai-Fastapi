@@ -1,303 +1,116 @@
 # Qwen3-TTS OpenAI-Compatible API Server
-# Multi-stage Dockerfile optimized for GPU/CUDA and CPU deployments
+#
+# Targets:
+#   production  GPU image (PyTorch cu128 wheels; they bundle the CUDA runtime,
+#               the host driver comes in through the NVIDIA container toolkit)
+#   cpu-base    CPU-only image
+#
+# Package versions are pinned by docker/constraints.txt, the environment the
+# benchmarks in docs/PERFORMANCE.md were measured with.
+
+ARG TORCH_VERSION=2.11.0
 
 # =============================================================================
-# Stage 1: Base image with system dependencies
+# GPU image
 # =============================================================================
-# Updated to CUDA 12.8 for Blackwell (RTX 50xx) GPU support
-ARG BASE_IMAGE=nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
-FROM ${BASE_IMAGE} AS base
+# Ubuntu 24.04 ships Python 3.12. The former Ubuntu 22.04 base had
+# Python 3.11.0rc1, a release candidate on which TorchDynamo segfaulted while
+# compiling the model.
+FROM ubuntu:24.04 AS production
+ARG TORCH_VERSION
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV NUMBA_CACHE_DIR=/tmp/numba_cache
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    NUMBA_CACHE_DIR=/tmp/numba_cache \
+    PATH="/opt/venv/bin:$PATH"
 
-# Install system dependencies
+# build-essential and python3-dev stay: Triton compiles its launcher at runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
-    python3-pip \
-    build-essential \
-    git \
-    curl \
-    ffmpeg \
-    libsndfile1 \
-    libsox-dev \
-    sox \
+        python3 python3-venv python3-dev build-essential \
+        curl ffmpeg libsndfile1 sox libsox-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
-    && ln -sf /usr/bin/python3 /usr/bin/python
+    && python3 -m venv /opt/venv \
+    && pip install --no-cache-dir --upgrade pip
 
-# Set up Python virtual environment
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir torch==${TORCH_VERSION} torchaudio==${TORCH_VERSION} \
+        --index-url https://download.pytorch.org/whl/cu128
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# =============================================================================
-# Stage 2: Builder with CUDA development tools for flash-attn
-# =============================================================================
-# Updated to CUDA 12.8 for Blackwell (RTX 50xx) GPU support
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS builder
-
-# Install Python and build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
-    build-essential \
-    git \
-    curl \
-    ninja-build \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
-    && ln -sf /usr/bin/python3 /usr/bin/python
-
-# Set up Python virtual environment
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-WORKDIR /build
-
-# Copy dependency files
-COPY pyproject.toml ./
-COPY README.md ./
-
-# Install Python dependencies (cu128 for CUDA 12.8 / Blackwell RTX 50xx support)
-RUN pip install --no-cache-dir \
-    torch>=2.0.0 \
-    torchaudio>=2.0.0 \
-    --index-url https://download.pytorch.org/whl/cu128
-
-# Install the main package dependencies
-RUN pip install --no-cache-dir \
-    transformers>=4.40.0 \
-    accelerate>=1.0.0 \
-    librosa \
-    soundfile \
-    pydub \
-    numpy \
-    scipy \
-    einops \
-    onnxruntime-gpu
-
-# Install FastAPI and server dependencies
-RUN pip install --no-cache-dir \
-    fastapi>=0.109.0 \
-    uvicorn[standard]>=0.27.0 \
-    python-multipart \
-    pydantic>=2.0.0 \
-    inflect \
-    aiofiles
-
-# Skip Flash Attention compilation for faster builds
-# PyTorch's native SDPA (Scaled Dot-Product Attention) is used instead
-# SDPA is very fast on modern GPUs (Blackwell, Ada, Ampere) and avoids
-# the resource-intensive flash-attn compilation
-RUN echo "Using PyTorch SDPA instead of Flash Attention for Blackwell compatibility"
-
-# =============================================================================
-# Stage 3: Production image (official backend)
-# =============================================================================
-FROM base AS production
+COPY docker/requirements.txt docker/constraints.txt /tmp/deps/
+RUN pip install --no-cache-dir -r /tmp/deps/requirements.txt -c /tmp/deps/constraints.txt
 
 WORKDIR /app
-
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Copy application code
 COPY . .
+# Dependencies are already in place; --no-deps keeps the gradio demo stack out
+RUN pip install --no-cache-dir --no-deps -e .
 
-# Install the package in editable mode
-RUN pip install --no-cache-dir -e .
-
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser \
-    && mkdir -p /tmp/numba_cache \
-    && chown -R appuser:appuser /app /tmp/numba_cache
+# Ubuntu 24.04 comes with a uid-1000 "ubuntu" user; replace it so the mounted
+# Hugging Face cache (owned by uid 1000 on the host) stays writable
+RUN userdel -r ubuntu 2>/dev/null; \
+    useradd --uid 1000 --create-home --shell /bin/bash appuser \
+    && mkdir -p /tmp/numba_cache /home/appuser/.cache/compile \
+    && chown -R appuser:appuser /app /tmp/numba_cache /home/appuser/.cache
 USER appuser
 
-# Environment variables
-ENV HOST=0.0.0.0
-ENV PORT=8880
-ENV WORKERS=1
-ENV PYTHONPATH=/app
-ENV TTS_BACKEND=official
+# torch.compile and Triton caches; mount a volume on .cache/compile so later
+# starts reuse the compiled kernels (~30 s instead of ~2 min).
+# Expandable segments cut the reserved VRAM from ~4.7 to ~3.4 GB (less
+# fragmentation), at unchanged speed.
+ENV HOST=0.0.0.0 \
+    PORT=8880 \
+    WORKERS=1 \
+    PYTHONPATH=/app \
+    TTS_BACKEND=fast \
+    TORCHINDUCTOR_CACHE_DIR=/home/appuser/.cache/compile/inductor \
+    TRITON_CACHE_DIR=/home/appuser/.cache/compile/triton \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Expose port
 EXPOSE 8880
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8880/health || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Run the server
 CMD ["python", "-m", "api.main"]
 
 # =============================================================================
-# Stage 4: vLLM-Omni backend (with vLLM dependencies)
+# CPU-only image
 # =============================================================================
-FROM base AS vllm-builder
+FROM python:3.12-slim AS cpu-base
+ARG TORCH_VERSION
 
-WORKDIR /build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    NUMBA_CACHE_DIR=/tmp/numba_cache
 
-# Copy dependency files
-COPY pyproject.toml ./
-COPY README.md ./
-
-# Install base dependencies first
-RUN pip install --no-cache-dir \
-    torch>=2.0.0 \
-    torchaudio>=2.0.0 \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# Install vLLM (this may take a while)
-RUN pip install --no-cache-dir vllm>=0.4.0
-
-# Install the main package dependencies
-RUN pip install --no-cache-dir \
-    transformers>=4.40.0 \
-    accelerate>=1.0.0 \
-    librosa \
-    soundfile \
-    pydub \
-    numpy \
-    scipy \
-    einops \
-    onnxruntime-gpu
-
-# Install FastAPI and server dependencies
-RUN pip install --no-cache-dir \
-    fastapi>=0.109.0 \
-    uvicorn[standard]>=0.27.0 \
-    python-multipart \
-    pydantic>=2.0.0 \
-    inflect \
-    aiofiles
-
-# Optional: Install flash-attention for better performance
-RUN pip install --no-cache-dir flash-attn --no-build-isolation || true
-
-# =============================================================================
-# Stage 5: vLLM-Omni production image
-# =============================================================================
-FROM base AS vllm-production
-
-WORKDIR /app
-
-# Copy virtual environment from vllm-builder
-COPY --from=vllm-builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Copy application code
-COPY . .
-
-# Install the package in editable mode with vllm extras
-RUN pip install --no-cache-dir -e ".[vllm]"
-
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser \
-    && mkdir -p /tmp/numba_cache \
-    && chown -R appuser:appuser /app /tmp/numba_cache
-USER appuser
-
-# Environment variables
-ENV HOST=0.0.0.0
-ENV PORT=8880
-ENV WORKERS=1
-ENV PYTHONPATH=/app
-ENV TTS_BACKEND=vllm_omni
-
-# Expose port
-EXPOSE 8880
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-    CMD curl -f http://localhost:8880/health || exit 1
-
-# Run the server
-CMD ["python", "-m", "api.main"]
-
-# =============================================================================
-# CPU-only variant
-# =============================================================================
-FROM python:3.11-slim AS cpu-base
-
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV NUMBA_CACHE_DIR=/tmp/numba_cache
-
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    curl \
-    ffmpeg \
-    libsndfile1 \
-    libsox-dev \
-    sox \
+        build-essential curl ffmpeg libsndfile1 sox libsox-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir torch==${TORCH_VERSION} torchaudio==${TORCH_VERSION} \
+        --index-url https://download.pytorch.org/whl/cpu
+
+COPY docker/requirements.txt docker/constraints.txt /tmp/deps/
+RUN pip install --no-cache-dir -r /tmp/deps/requirements.txt -c /tmp/deps/constraints.txt
+
 WORKDIR /app
-
-# Copy dependency files first for better caching
-COPY pyproject.toml README.md ./
-
-# Install PyTorch (CPU version)
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir \
-    torch>=2.0.0 \
-    torchaudio>=2.0.0 \
-    --index-url https://download.pytorch.org/whl/cpu
-
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    transformers>=4.40.0 \
-    accelerate>=1.0.0 \
-    librosa \
-    soundfile \
-    pydub \
-    numpy \
-    scipy \
-    einops \
-    onnxruntime \
-    fastapi>=0.109.0 \
-    uvicorn[standard]>=0.27.0 \
-    python-multipart \
-    pydantic>=2.0.0 \
-    inflect \
-    aiofiles
-
-# Copy application code
 COPY . .
+RUN pip install --no-cache-dir --no-deps -e .
 
-# Install the package
-RUN pip install --no-cache-dir -e .
-
-# Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser \
     && mkdir -p /tmp/numba_cache \
     && chown -R appuser:appuser /app /tmp/numba_cache
 USER appuser
 
-# Environment variables
-ENV HOST=0.0.0.0
-ENV PORT=8880
-ENV WORKERS=1
-ENV PYTHONPATH=/app
+ENV HOST=0.0.0.0 \
+    PORT=8880 \
+    WORKERS=1 \
+    PYTHONPATH=/app \
+    TTS_BACKEND=official
 
 EXPOSE 8880
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8880/health || exit 1
-
-CMD ["python", "-m", "api.main"]
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 CMD ["python", "-m", "api.main"]

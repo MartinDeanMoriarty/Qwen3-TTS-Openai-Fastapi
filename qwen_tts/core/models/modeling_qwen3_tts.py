@@ -2019,7 +2019,7 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
                 return text_embed + codec_embed, tts_pad_embed
 
     @torch.no_grad()
-    def generate(
+    def build_talker_inputs(
         self,
         input_ids: Optional[list[torch.Tensor]] = None,
         instruct_ids: Optional[list[torch.Tensor]] = None,
@@ -2028,43 +2028,12 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
         languages: list[str] = None,
         speakers: list[str] = None,
         non_streaming_mode = False,
-        max_new_tokens: int = 4096,
-        do_sample: bool = True,
-        top_k: int = 50,
-        top_p: float = 1.0,
-        temperature: float = 0.9,
-        subtalker_dosample: bool = True,
-        subtalker_top_k: int = 50,
-        subtalker_top_p: float = 1.0,
-        subtalker_temperature: float = 0.9,
-        eos_token_id: Optional[int] = None,
-        repetition_penalty: float = 1.05,
-        **kwargs,
     ):
-        talker_kwargs = {
-            "max_new_tokens": max_new_tokens,
-            "min_new_tokens": 2,
-            "do_sample": do_sample,
-            "top_k": top_k,
-            "top_p": top_p,
-            "temperature": temperature,
-            "subtalker_dosample": subtalker_dosample, 
-            "subtalker_top_k": subtalker_top_k,
-            "subtalker_top_p": subtalker_top_p,
-            "subtalker_temperature": subtalker_temperature,
-            "eos_token_id": eos_token_id
-            if eos_token_id is not None
-            else self.config.talker_config.codec_eos_token_id,
-            "repetition_penalty": repetition_penalty,
-            "suppress_tokens": [
-                i
-                for i in range(self.config.talker_config.vocab_size - 1024, self.config.talker_config.vocab_size)
-                if i not in (self.config.talker_config.codec_eos_token_id,)
-            ],
-            "output_hidden_states": getattr(kwargs, "output_hidden_states", True),
-            "return_dict_in_generate": getattr(kwargs, "return_dict_in_generate", True)
-        }
-        
+        """Build the talker prefill embeddings, attention mask, trailing text and pad embedding.
+
+        Shared by `generate` and the CUDA-graph fast path so both condition the
+        talker in exactly the same way.
+        """
         talker_input_embeds = [[] for _ in range(len(input_ids))]
 
         voice_clone_spk_embeds = None
@@ -2267,6 +2236,65 @@ class Qwen3TTSForConditionalGeneration(Qwen3TTSPreTrainedModel, GenerationMixin)
         padding_mask = arange_tensor >= lengths_tensor
         padded_hiddens[padding_mask] = pad_embedding_vector
         trailing_text_hiddens = padded_hiddens
+
+        return talker_input_embeds, talker_attention_mask, trailing_text_hiddens, tts_pad_embed
+
+    @torch.no_grad()
+    def generate(
+        self,
+        input_ids: Optional[list[torch.Tensor]] = None,
+        instruct_ids: Optional[list[torch.Tensor]] = None,
+        ref_ids: Optional[list[torch.Tensor]] = None,
+        voice_clone_prompt: list[dict] = None,
+        languages: list[str] = None,
+        speakers: list[str] = None,
+        non_streaming_mode = False,
+        max_new_tokens: int = 4096,
+        do_sample: bool = True,
+        top_k: int = 50,
+        top_p: float = 1.0,
+        temperature: float = 0.9,
+        subtalker_dosample: bool = True,
+        subtalker_top_k: int = 50,
+        subtalker_top_p: float = 1.0,
+        subtalker_temperature: float = 0.9,
+        eos_token_id: Optional[int] = None,
+        repetition_penalty: float = 1.05,
+        **kwargs,
+    ):
+        talker_kwargs = {
+            "max_new_tokens": max_new_tokens,
+            "min_new_tokens": 2,
+            "do_sample": do_sample,
+            "top_k": top_k,
+            "top_p": top_p,
+            "temperature": temperature,
+            "subtalker_dosample": subtalker_dosample, 
+            "subtalker_top_k": subtalker_top_k,
+            "subtalker_top_p": subtalker_top_p,
+            "subtalker_temperature": subtalker_temperature,
+            "eos_token_id": eos_token_id
+            if eos_token_id is not None
+            else self.config.talker_config.codec_eos_token_id,
+            "repetition_penalty": repetition_penalty,
+            "suppress_tokens": [
+                i
+                for i in range(self.config.talker_config.vocab_size - 1024, self.config.talker_config.vocab_size)
+                if i not in (self.config.talker_config.codec_eos_token_id,)
+            ],
+            "output_hidden_states": getattr(kwargs, "output_hidden_states", True),
+            "return_dict_in_generate": getattr(kwargs, "return_dict_in_generate", True)
+        }
+
+        talker_input_embeds, talker_attention_mask, trailing_text_hiddens, tts_pad_embed = self.build_talker_inputs(
+            input_ids=input_ids,
+            instruct_ids=instruct_ids,
+            ref_ids=ref_ids,
+            voice_clone_prompt=voice_clone_prompt,
+            languages=languages,
+            speakers=speakers,
+            non_streaming_mode=non_streaming_mode,
+        )
 
         # forward
         talker_result = self.talker.generate(

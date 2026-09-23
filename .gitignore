@@ -62,3 +62,5 @@ logs/
 
 # Backup directories (not needed in repo)
 sample-voices-backup/
+# onnxruntime telemetry session file, written to the working directory
+:memory:.ses

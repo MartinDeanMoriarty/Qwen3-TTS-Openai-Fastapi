@@ -1,0 +1,7 @@
+# Keep the build context small: none of this is needed inside the image
+.git
+**/__pycache__
+.pytest_cache
+benchmarks/results
+*.log
+:memory:.ses

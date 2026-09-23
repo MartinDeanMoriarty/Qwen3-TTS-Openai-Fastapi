@@ -5,17 +5,20 @@ OpenAI-compatible router for text-to-speech API.
 Implements endpoints compatible with OpenAI's TTS API specification.
 """
 
+import asyncio
+import base64
+import json
 import logging
-import time
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from ..structures.schemas import OpenAISpeechRequest, ModelInfo, VoiceInfo
+from ..services.language import LANGUAGE_CODES, resolve_language
 from ..services.text_processing import normalize_text
-from ..services.audio_encoding import encode_audio, get_content_type, DEFAULT_SAMPLE_RATE
+from ..services.audio_encoding import encode_audio, encode_audio_streaming, get_content_type, DEFAULT_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +29,7 @@ router = APIRouter(
 
 
 # Language code to language name mapping
-LANGUAGE_CODE_MAPPING = {
-    "en": "English",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "de": "German",
-    "fr": "French",
-    "es": "Spanish",
-    "ru": "Russian",
-    "pt": "Portuguese",
-    "it": "Italian",
-}
+LANGUAGE_CODE_MAPPING = LANGUAGE_CODES
 
 # Available models (including language-specific variants)
 AVAILABLE_MODELS = [
@@ -188,6 +180,42 @@ async def generate_speech(
         raise RuntimeError(f"Speech generation failed: {e}")
 
 
+async def stream_speech(text: str, language: str, request: OpenAISpeechRequest) -> StreamingResponse:
+    """Stream audio while it is generated (OpenAI `stream_format` "audio" or "sse")."""
+    backend = await get_tts_backend()
+    chunks = backend.generate_speech_stream(
+        text=text,
+        voice=get_voice_name(request.voice),
+        language=language,
+        instruct=request.instruct,
+        speed=request.speed,
+    )
+    # Wait for the first chunk before answering, so a failure is still a
+    # proper HTTP error instead of a stream that breaks off
+    first, sample_rate = await chunks.__anext__()
+
+    async def audio():
+        yield first
+        async for chunk, _ in chunks:
+            yield chunk
+
+    encoded = encode_audio_streaming(audio(), request.response_format, sample_rate)
+    if request.stream_format == "sse":
+        async def events():
+            async for data in encoded:
+                delta = {"type": "speech.audio.delta", "audio": base64.b64encode(data).decode()}
+                yield f"data: {json.dumps(delta)}\n\n"
+            yield f"data: {json.dumps({'type': 'speech.audio.done'})}\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    return StreamingResponse(
+        encoded,
+        media_type=get_content_type(request.response_format),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @router.post("/audio/speech")
 async def create_speech(
     request: OpenAISpeechRequest,
@@ -210,8 +238,11 @@ async def create_speech(
         )
     
     try:
-        # Normalize input text
-        normalized_text = normalize_text(request.input, request.normalization_options)
+        # Model suffix (tts-1-de), then the request, then the text itself
+        model_language = extract_language_from_model(request.model)
+        language = resolve_language(request.language, model_language, request.input)
+
+        normalized_text = normalize_text(request.input, request.normalization_options, language)
         
         if not normalized_text.strip():
             raise HTTPException(
@@ -223,10 +254,10 @@ async def create_speech(
                 },
             )
         
-        # Extract language from model name if present, otherwise use request language
-        model_language = extract_language_from_model(request.model)
-        language = model_language if model_language else (request.language or "Auto")
         
+        if request.stream or request.stream_format:
+            return await stream_speech(normalized_text, language, request)
+
         # Generate speech
         audio, sample_rate = await generate_speech(
             text=normalized_text,
@@ -236,8 +267,8 @@ async def create_speech(
             speed=request.speed,
         )
         
-        # Encode audio to requested format
-        audio_bytes = encode_audio(audio, request.response_format, sample_rate)
+        # Encode off the event loop; mp3/opus/aac shell out to ffmpeg
+        audio_bytes = await asyncio.to_thread(encode_audio, audio, request.response_format, sample_rate)
         
         # Get content type
         content_type = get_content_type(request.response_format)

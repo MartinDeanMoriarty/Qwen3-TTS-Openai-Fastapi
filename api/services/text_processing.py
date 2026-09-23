@@ -376,26 +376,83 @@ def handle_time(t: re.Match[str]) -> str:
     return " ".join(numbers) + half
 
 
-def normalize_text(text: str, options: Optional[NormalizationOptions] = None) -> str:
+_SENTENCE_END = re.compile(r"(?<=[.!?;:…])\s+")
+_CLAUSE_END = re.compile(r"(?<=[,–—-])\s+")
+
+
+def split_into_segments(text: str, max_chars: int) -> list[str]:
+    """Split long text into sentence groups of at most `max_chars` characters.
+
+    Sentences are packed greedily. A single sentence longer than `max_chars`
+    is broken at clause boundaries, and failing that at spaces.
+    """
+    text = text.strip()
+    if len(text) <= max_chars:
+        return [text] if text else []
+
+    def pack(parts):
+        packed, current = [], ""
+        for part in parts:
+            if current and len(current) + 1 + len(part) > max_chars:
+                packed.append(current)
+                current = part
+            else:
+                current = f"{current} {part}" if current else part
+        return packed + ([current] if current else [])
+
+    def pieces(part: str, patterns):
+        if len(part) <= max_chars:
+            return [part]
+        if not patterns:
+            return pack(part.split())
+        return [p for sub in patterns[0].split(part) for p in pieces(sub, patterns[1:])]
+
+    return pack(pieces(text, [_SENTENCE_END, _CLAUSE_END]))
+
+
+def _clean_punctuation_and_whitespace(text: str) -> str:
+    """Language-neutral cleanup: quotes, CJK punctuation and whitespace."""
+    text = text.replace(chr(8216), "'").replace(chr(8217), "'")
+    text = text.replace("«", chr(8220)).replace("»", chr(8221))
+    text = text.replace(chr(8220), '"').replace(chr(8221), '"')
+    for a, b in zip("、。！，：；？–", ",.!,:;?-"):
+        text = text.replace(a, b + " ")
+    text = re.sub(r"[^\S \n]", " ", text)
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def normalize_text(
+    text: str,
+    options: Optional[NormalizationOptions] = None,
+    language: str = "English",
+) -> str:
     """
     Normalize text for TTS processing.
-    
+
     Handles URLs, emails, numbers, money, units, time, phone numbers,
     and various special characters to make them pronounceable.
-    
+
     Args:
         text: The input text to normalize
         options: Normalization options controlling which transformations to apply
-        
+        language: Synthesis language. The rules below spell things out in
+            English ("22" -> "twenty-two", "@" -> "at"), so for any other
+            language only the language-neutral cleanup runs and Qwen3-TTS
+            reads numbers and symbols in the language of the sentence itself.
+
     Returns:
         Normalized text suitable for TTS processing
     """
     if options is None:
         options = NormalizationOptions()
-    
+
     if not options.normalize:
         return text
-    
+
+    if language not in ("English", "Auto"):
+        return _clean_punctuation_and_whitespace(text)
+
     # Handle email addresses first if enabled
     if options.email_normalization:
         text = EMAIL_PATTERN.sub(handle_email, text)

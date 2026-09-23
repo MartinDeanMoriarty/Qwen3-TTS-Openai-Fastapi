@@ -12,6 +12,7 @@ from typing import Optional
 
 from .base import TTSBackend
 from .official_qwen3_tts import OfficialQwen3TTSBackend
+from .fast_qwen3_tts import FastQwen3TTSBackend
 from .vllm_omni_qwen3_tts import VLLMOmniQwen3TTSBackend
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ def get_backend() -> TTSBackend:
     
     The backend is selected based on the TTS_BACKEND environment variable:
     - "official" (default): Use official Qwen3-TTS implementation
+    - "fast": Official model with a CUDA-graph decode loop (GPU)
     - "vllm_omni": Use vLLM-Omni for faster inference
     
     Returns:
@@ -75,6 +77,14 @@ def get_backend() -> TTSBackend:
         
         logger.info(f"Using official Qwen3-TTS backend with model: {_backend_instance.get_model_id()}")
     
+    elif backend_type == "fast":
+        if model_name:
+            _backend_instance = FastQwen3TTSBackend(model_name=model_name)
+        else:
+            _backend_instance = FastQwen3TTSBackend()
+
+        logger.info(f"Using fast (CUDA graph) Qwen3-TTS backend with model: {_backend_instance.get_model_id()}")
+
     elif backend_type == "vllm_omni" or backend_type == "vllm-omni" or backend_type == "vllm":
         # vLLM-Omni backend
         if model_name:
@@ -91,7 +101,7 @@ def get_backend() -> TTSBackend:
         logger.error(f"Unknown backend type: {backend_type}")
         raise ValueError(
             f"Unknown TTS_BACKEND: {backend_type}. "
-            f"Supported values: 'official', 'vllm_omni'"
+            f"Supported values: 'official', 'fast', 'vllm_omni'"
         )
     
     return _backend_instance
@@ -122,11 +132,14 @@ async def initialize_backend(warmup: bool = False) -> TTSBackend:
         if warmup_enabled:
             logger.info("Performing backend warmup...")
             try:
-                # Run a simple warmup generation
+                # The Base model only knows the cloned sample voices, so warm up
+                # with one of those rather than a built-in speaker
+                voices = backend.get_supported_voices()
+                voice = os.getenv("TTS_WARMUP_VOICE") or (voices[0] if voices else "Vivian")
                 await backend.generate_speech(
-                    text="Hello, this is a warmup test.",
-                    voice="Vivian",
-                    language="English",
+                    text="Hallo, das ist ein kurzer Test zum Aufwärmen.",
+                    voice=voice,
+                    language="German",
                 )
                 logger.info("Backend warmup completed successfully")
             except Exception as e:

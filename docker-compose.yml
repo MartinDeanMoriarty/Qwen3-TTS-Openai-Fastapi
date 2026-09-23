@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  # GPU-enabled service with official backend (default)
+  # GPU service with the fast (CUDA graph) backend
   qwen3-tts-gpu:
     build:
       context: .
@@ -16,15 +14,27 @@ services:
       - PORT=8881
       - WORKERS=1
       - CORS_ORIGINS=*
-      - TTS_BACKEND=official
-      - TTS_WARMUP_ON_START=false
+      # fast = official model with captured CUDA graphs per decode step;
+      # official = transformers generate() (slower than real time)
+      - TTS_BACKEND=fast
+      # Fuse the decode step with torch.compile, and store the talker and
+      # code-predictor weights as int8 (quality measured equal to bf16).
+      # Together ~6.5x real time on an RTX 4070 Ti; the first start compiles
+      # for ~2 min, later starts reuse the cache volume below (~30 s).
+      - TTS_COMPILE=true
+      - TTS_QUANTIZE=int8
+      # Capture the graph and run one generation at startup, not on the first request
+      - TTS_WARMUP_ON_START=true
       # Use Base model for voice cloning support
       - TTS_MODEL_NAME=Qwen/Qwen3-TTS-12Hz-1.7B-Base
+      # Load from the mounted cache without asking the Hub (the model must be cached)
+      - HF_HUB_OFFLINE=1
       # Path to custom voice samples inside container
       - VOICE_SAMPLES_DIR=/app/voice-samples
       # Auto-unload model after N minutes of inactivity to free VRAM (0=disabled)
-      # Useful when sharing GPU with other apps like Ollama, Kokoro TTS, etc.
-      - TTS_INACTIVITY_TIMEOUT_MINUTES=15
+      # 0: Das Modell bleibt dauerhaft im VRAM (~5 GB). Neben gemma4:e2b (~2 GB)
+      # ist auf der 12-GB-Karte genug Platz, und so gibt es keinen Kaltstart.
+      - TTS_INACTIVITY_TIMEOUT_MINUTES=0
       # When using device_ids filter, the GPU appears as device 0 inside container
       - CUDA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -33,6 +43,8 @@ services:
       - ~/.cache/huggingface:/home/appuser/.cache/huggingface
       # Mount custom voice samples for voice cloning
       - ./sample-voices-xtts:/app/voice-samples:ro
+      # Compiled-kernel cache (torch.compile / Triton)
+      - qwen3-tts-compile-cache:/home/appuser/.cache/compile
     deploy:
       resources:
         reservations:
@@ -46,7 +58,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      # First start compiles for a few minutes
+      start_period: 300s
 
   # GPU-enabled service with vLLM-Omni backend
   qwen3-tts-vllm:
@@ -69,7 +82,6 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - HF_HOME=/root/.cache/huggingface
     volumes:
-      # Mount model cache for persistence
       - ~/.cache/huggingface:/root/.cache/huggingface
     ipc: host
     deploy:
@@ -117,6 +129,9 @@ services:
     profiles:
       - cpu
 
-# To run GPU version with official backend: docker-compose up qwen3-tts-gpu
+volumes:
+  qwen3-tts-compile-cache:
+
+# To run GPU version with fast backend: docker-compose up qwen3-tts-gpu
 # To run GPU version with vLLM backend: docker-compose --profile vllm up qwen3-tts-vllm
 # To run CPU version: docker-compose --profile cpu up qwen3-tts-cpu

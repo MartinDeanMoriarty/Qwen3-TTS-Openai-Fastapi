@@ -1,0 +1,358 @@
+{
+  "config": {
+    "label": "quality-4-int4-s5",
+    "voice": "Kyle",
+    "voice_dir": "/app/sample-voices-xtts",
+    "seeds": 5,
+    "whisper": true,
+    "stream": false
+  },
+  "backend": "fast",
+  "summary": {
+    "speaker_similarity": {
+      "median": 0.9791802167892456,
+      "mean": 0.9792516183853149,
+      "min": 0.9726183414459229,
+      "max": 0.9839704036712646,
+      "n": 25
+    },
+    "wer": {
+      "median": 0.0,
+      "mean": 0.00125,
+      "min": 0.0,
+      "max": 0.03125,
+      "n": 25
+    },
+    "cer": {
+      "median": 0.0,
+      "mean": 0.0002030456852791878,
+      "min": 0.0,
+      "max": 0.005076142131979695,
+      "n": 25
+    }
+  },
+  "per_case": {
+    "de_short": {
+      "speaker_similarity_mean": 0.9761894226074219,
+      "wer_mean": 0.0
+    },
+    "de_sentence": {
+      "speaker_similarity_mean": 0.9792806744575501,
+      "wer_mean": 0.0
+    },
+    "de_question": {
+      "speaker_similarity_mean": 0.9787299513816834,
+      "wer_mean": 0.0
+    },
+    "de_long": {
+      "speaker_similarity_mean": 0.9817757487297059,
+      "wer_mean": 0.00625
+    },
+    "en_sentence": {
+      "speaker_similarity_mean": 0.9802822947502137,
+      "wer_mean": 0.0
+    }
+  },
+  "samples": [
+    {
+      "case": "de_short",
+      "seed": 0,
+      "language": "German",
+      "text": "Alles klar, ich kümmere mich darum.",
+      "audio_s": 2.296875,
+      "speaker_similarity": 0.980675220489502,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_short_s0.wav",
+      "transcript": "Alles klar, ich kümmere mich darum.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_short",
+      "seed": 1,
+      "language": "German",
+      "text": "Alles klar, ich kümmere mich darum.",
+      "audio_s": 2.536875,
+      "speaker_similarity": 0.9774290323257446,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_short_s1.wav",
+      "transcript": "Alles klar, ich kümmere mich darum.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_short",
+      "seed": 2,
+      "language": "German",
+      "text": "Alles klar, ich kümmere mich darum.",
+      "audio_s": 2.216875,
+      "speaker_similarity": 0.9726183414459229,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_short_s2.wav",
+      "transcript": "Alles klar, ich kümmere mich darum.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_short",
+      "seed": 3,
+      "language": "German",
+      "text": "Alles klar, ich kümmere mich darum.",
+      "audio_s": 2.536875,
+      "speaker_similarity": 0.9750938415527344,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_short_s3.wav",
+      "transcript": "Alles klar, ich kümmere mich darum.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_short",
+      "seed": 4,
+      "language": "German",
+      "text": "Alles klar, ich kümmere mich darum.",
+      "audio_s": 2.456875,
+      "speaker_similarity": 0.9751306772232056,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_short_s4.wav",
+      "transcript": "»Alles klar, ich kümmere mich darum.«",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_sentence",
+      "seed": 0,
+      "language": "German",
+      "text": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die zweiundzwanzig Grad.",
+      "audio_s": 4.536875,
+      "speaker_similarity": 0.9815037846565247,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_sentence_s0.wav",
+      "transcript": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die 22 Grad.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_sentence",
+      "seed": 1,
+      "language": "German",
+      "text": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die zweiundzwanzig Grad.",
+      "audio_s": 5.496875,
+      "speaker_similarity": 0.977415919303894,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_sentence_s1.wav",
+      "transcript": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die 22 Grad.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_sentence",
+      "seed": 2,
+      "language": "German",
+      "text": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die zweiundzwanzig Grad.",
+      "audio_s": 4.856875,
+      "speaker_similarity": 0.9788974523544312,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_sentence_s2.wav",
+      "transcript": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die 22 Grad.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_sentence",
+      "seed": 3,
+      "language": "German",
+      "text": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die zweiundzwanzig Grad.",
+      "audio_s": 4.456875,
+      "speaker_similarity": 0.9780174493789673,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_sentence_s3.wav",
+      "transcript": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die 22 Grad.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_sentence",
+      "seed": 4,
+      "language": "German",
+      "text": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die zweiundzwanzig Grad.",
+      "audio_s": 4.456875,
+      "speaker_similarity": 0.9805687665939331,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_sentence_s4.wav",
+      "transcript": "Das Wetter in Berlin wird morgen sonnig mit Temperaturen um die 22 Grad.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_question",
+      "seed": 0,
+      "language": "German",
+      "text": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "audio_s": 4.616875,
+      "speaker_similarity": 0.9778729677200317,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_question_s0.wav",
+      "transcript": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_question",
+      "seed": 1,
+      "language": "German",
+      "text": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "audio_s": 4.296875,
+      "speaker_similarity": 0.9787482023239136,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_question_s1.wav",
+      "transcript": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_question",
+      "seed": 2,
+      "language": "German",
+      "text": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "audio_s": 4.536875,
+      "speaker_similarity": 0.9795472025871277,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_question_s2.wav",
+      "transcript": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_question",
+      "seed": 3,
+      "language": "German",
+      "text": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "audio_s": 4.216875,
+      "speaker_similarity": 0.9791802167892456,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_question_s3.wav",
+      "transcript": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_question",
+      "seed": 4,
+      "language": "German",
+      "text": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "audio_s": 5.816875,
+      "speaker_similarity": 0.9783011674880981,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_question_s4.wav",
+      "transcript": "Soll ich dir die Zusammenfassung per E-Mail schicken oder lieber hier vorlesen?",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_long",
+      "seed": 0,
+      "language": "German",
+      "text": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung, und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "audio_s": 12.616875,
+      "speaker_similarity": 0.9839704036712646,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_long_s0.wav",
+      "transcript": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_long",
+      "seed": 1,
+      "language": "German",
+      "text": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung, und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "audio_s": 11.176875,
+      "speaker_similarity": 0.9811580181121826,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_long_s1.wav",
+      "transcript": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_long",
+      "seed": 2,
+      "language": "German",
+      "text": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung, und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "audio_s": 10.376875,
+      "speaker_similarity": 0.9806994795799255,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_long_s2.wav",
+      "transcript": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_long",
+      "seed": 3,
+      "language": "German",
+      "text": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung, und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "audio_s": 11.416875,
+      "speaker_similarity": 0.9831258058547974,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_long_s3.wav",
+      "transcript": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "de_long",
+      "seed": 4,
+      "language": "German",
+      "text": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinem Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung, und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "audio_s": 10.936875,
+      "speaker_similarity": 0.9799250364303589,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/de_long_s4.wav",
+      "transcript": "Ich habe drei neue Nachrichten gefunden. Die erste ist von deinen Kollegen und betrifft das Projekt am Montag. Die zweite ist eine Rechnung und die dritte ist eine Erinnerung an deinen Zahnarzttermin.",
+      "wer": 0.03125,
+      "cer": 0.005076142131979695
+    },
+    {
+      "case": "en_sentence",
+      "seed": 0,
+      "language": "English",
+      "text": "Sure, I have added the meeting to your calendar for tomorrow at ten.",
+      "audio_s": 4.856875,
+      "speaker_similarity": 0.9826368093490601,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/en_sentence_s0.wav",
+      "transcript": "Sure. I have added the meeting to your calendar for tomorrow at 10.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "en_sentence",
+      "seed": 1,
+      "language": "English",
+      "text": "Sure, I have added the meeting to your calendar for tomorrow at ten.",
+      "audio_s": 4.456875,
+      "speaker_similarity": 0.9785201549530029,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/en_sentence_s1.wav",
+      "transcript": "Sure. I have added the meeting to your calendar for tomorrow at 10.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "en_sentence",
+      "seed": 2,
+      "language": "English",
+      "text": "Sure, I have added the meeting to your calendar for tomorrow at ten.",
+      "audio_s": 3.896875,
+      "speaker_similarity": 0.9807185530662537,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/en_sentence_s2.wav",
+      "transcript": "Sure. I have added the meeting to your calendar for tomorrow at 10.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "en_sentence",
+      "seed": 3,
+      "language": "English",
+      "text": "Sure, I have added the meeting to your calendar for tomorrow at ten.",
+      "audio_s": 3.816875,
+      "speaker_similarity": 0.9783708453178406,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/en_sentence_s3.wav",
+      "transcript": "Sure. I have added the meeting to your calendar for tomorrow at 10.",
+      "wer": 0.0,
+      "cer": 0.0
+    },
+    {
+      "case": "en_sentence",
+      "seed": 4,
+      "language": "English",
+      "text": "Sure, I have added the meeting to your calendar for tomorrow at ten.",
+      "audio_s": 4.056875,
+      "speaker_similarity": 0.9811651110649109,
+      "wav": "/app/benchmarks/results/quality-4-int4-s5/en_sentence_s4.wav",
+      "transcript": "Sure, I have added the meeting to your calendar for tomorrow at 10.",
+      "wer": 0.0,
+      "cer": 0.0
+    }
+  ]
+}
