@@ -88,7 +88,7 @@ async def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--voice", default="Kyle")
+    parser.add_argument("--voice", default="Jarvis")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--label", default=None)
     asyncio.run(run(parser.parse_args()))

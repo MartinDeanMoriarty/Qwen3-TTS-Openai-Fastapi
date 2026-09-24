@@ -7,7 +7,7 @@ Measures what a client such as Open WebUI experiences: the full round trip of
 POST /v1/audio/speech. With --stream it also measures the time to the first
 audio byte. Standard library only, so it runs on the host.
 
-    python3 benchmarks/bench_api.py --label baseline --voice Kyle
+    python3 benchmarks/bench_api.py --label baseline --voice Jarvis
     python3 benchmarks/bench_api.py --label fast-stream --stream
     python3 benchmarks/bench_api.py --label cold --cold
 """
@@ -56,7 +56,7 @@ def wav_duration(data: bytes) -> float:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--url", default="http://127.0.0.1:8881")
-    parser.add_argument("--voice", default="Kyle")
+    parser.add_argument("--voice", default="Jarvis")
     parser.add_argument("--model", default="tts-1")
     parser.add_argument("--format", default="wav", help="wav gives audio duration and RTF")
     parser.add_argument("--runs", type=int, default=3)

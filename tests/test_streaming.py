@@ -98,14 +98,14 @@ def client(monkeypatch):
 class TestStreamingEndpoint:
     def test_stream_true_returns_audio_chunks(self, client):
         response = client.post("/v1/audio/speech", json={
-            "model": "tts-1", "input": "Hallo Welt", "voice": "Kyle", "response_format": "pcm", "stream": True})
+            "model": "tts-1", "input": "Hallo Welt", "voice": "Jarvis", "response_format": "pcm", "stream": True})
         assert response.status_code == 200
         assert response.headers["content-type"] == "audio/pcm"
         assert len(response.content) == 3 * 240 * 2
 
     def test_sse_stream_format(self, client):
         response = client.post("/v1/audio/speech", json={
-            "model": "tts-1", "input": "Hallo Welt", "voice": "Kyle", "response_format": "pcm",
+            "model": "tts-1", "input": "Hallo Welt", "voice": "Jarvis", "response_format": "pcm",
             "stream_format": "sse"})
         assert response.status_code == 200
         events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]

@@ -145,7 +145,7 @@ async def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--label", required=True)
-    parser.add_argument("--voice", default="Kyle")
+    parser.add_argument("--voice", default="Jarvis")
     parser.add_argument("--voice-dir", default="/app/sample-voices-xtts")
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--whisper", action="store_true")

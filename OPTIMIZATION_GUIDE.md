@@ -62,12 +62,12 @@ below) as a fallback and for CPU use.
 ```bash
 # raw PCM/WAV chunks as they are generated (lowest latency)
 curl -N http://localhost:8881/v1/audio/speech -H 'Content-Type: application/json' \
-  -d '{"model":"tts-1","input":"Hallo, wie geht es dir?","voice":"Kyle","response_format":"wav","stream":true}' \
+  -d '{"model":"tts-1","input":"Hallo, wie geht es dir?","voice":"Jarvis","response_format":"wav","stream":true}' \
   --output out.wav
 
 # server-sent events with base64 audio deltas (OpenAI stream_format "sse")
 curl -N http://localhost:8881/v1/audio/speech -H 'Content-Type: application/json' \
-  -d '{"model":"tts-1","input":"Hallo!","voice":"Kyle","response_format":"pcm","stream_format":"sse"}'
+  -d '{"model":"tts-1","input":"Hallo!","voice":"Jarvis","response_format":"pcm","stream_format":"sse"}'
 ```
 
 Compressed formats (mp3, opus, aac, flac) stream through a single ffmpeg

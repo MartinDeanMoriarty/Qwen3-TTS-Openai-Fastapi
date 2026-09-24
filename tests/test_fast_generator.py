@@ -11,7 +11,7 @@ import pytest
 import torch
 
 MODEL = os.getenv("TTS_TEST_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
-VOICE = os.path.join(os.path.dirname(__file__), "..", "sample-voices-xtts", "Kyle.wav")
+VOICE = os.path.join(os.path.dirname(__file__), "..", "sample-voices-xtts", "Jarvis.wav")
 GREEDY = dict(do_sample=False, subtalker_dosample=False)
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA GPU")

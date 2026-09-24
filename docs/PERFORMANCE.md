@@ -7,7 +7,7 @@ All numbers in this document were measured on one machine, with the scripts in
 |---|---|
 | GPU | NVIDIA GeForce RTX 4070 Ti, 12 GB (Ada, SM 8.9), driver 580, shared with Ollama |
 | CPU / RAM | Intel i9-10900X, 64 GB |
-| Model | `Qwen/Qwen3-TTS-12Hz-1.7B-Base`, voice cloning with an x-vector (voice "Kyle") |
+| Model | `Qwen/Qwen3-TTS-12Hz-1.7B-Base`, voice cloning with an x-vector (a private voice sample; the scripts default to the shipped voice "Jarvis") |
 | Texts | five assistant-style utterances, four German, one English (`benchmarks/common.py`) |
 | Software | PyTorch 2.11 (cu128), transformers 4.57.3, Python 3.12 |
 
@@ -197,8 +197,8 @@ out in English, "@" → "at") now only runs for English text.
 
 ```bash
 # end to end against the running server (standard library only)
-python3 benchmarks/bench_api.py --voice Kyle --no-language --label mine
-python3 benchmarks/bench_api.py --voice Kyle --stream --label mine-stream
+python3 benchmarks/bench_api.py --no-language --label mine
+python3 benchmarks/bench_api.py --stream --label mine-stream
 
 # In-process and quality: these load a second copy of the model, which does
 # not fit next to the server's on a 12 GB card, so unload the server's first
