@@ -65,6 +65,14 @@ class FastQwen3TTSBackend(OfficialQwen3TTSBackend):
         self.stream_decoder = StreamingDecoder(self.model.model.speech_tokenizer, left_context=STREAM_LEFT_CONTEXT)
         self.stream_decoder.capture()
         logger.info(f"CUDA graphs captured (max_seq_len={MAX_SEQ_LEN}, compile={COMPILE}, quantize={QUANTIZE})")
+        if COMPILE:
+            # Inductor's compile-worker pool is only needed while compiling. Left
+            # running it holds ~650 MB of RAM, and at exit the server waited
+            # for it long enough that Docker killed the container. Inductor
+            # starts a new pool if anything has to be compiled later.
+            from torch._inductor.async_compile import shutdown_compile_workers
+
+            shutdown_compile_workers()
 
     def _quantize(self, mode: str) -> None:
         if mode == "int8":

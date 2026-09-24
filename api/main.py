@@ -91,11 +91,12 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Cleanup
-    from .backends import stop_auto_unload, unload_backend
+    # Cleanup. The model is not unloaded: the process is exiting and the driver
+    # frees its memory anyway, while unloading took up to ~5 s of the 10 s
+    # Docker allows before it kills the container.
+    from .backends import stop_auto_unload
     logger.info("Server shutting down...")
     await stop_auto_unload()
-    await unload_backend()
 
 
 # Initialize FastAPI app

@@ -53,6 +53,9 @@ services:
               device_ids: ['0']
               capabilities: [gpu]
     restart: unless-stopped
+    # The server normally exits within a few seconds; more room than Docker's
+    # default 10 s so it is never killed mid-shutdown
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8881/health"]
       interval: 30s
