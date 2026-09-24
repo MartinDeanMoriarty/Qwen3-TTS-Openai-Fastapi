@@ -64,3 +64,6 @@ logs/
 sample-voices-backup/
 # onnxruntime telemetry session file, written to the working directory
 :memory:.ses
+
+# Voices licensed for private use only: used from disk, never published
+sample-voices-xtts/Kyle.wav

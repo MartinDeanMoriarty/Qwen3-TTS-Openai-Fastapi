@@ -5,3 +5,5 @@
 benchmarks/results
 *.log
 :memory:.ses
+# Voices licensed for private use only (mounted at runtime, not baked in)
+sample-voices-xtts/Kyle.wav
