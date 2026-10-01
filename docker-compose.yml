@@ -32,9 +32,22 @@ services:
       # Path to custom voice samples inside container
       - VOICE_SAMPLES_DIR=/app/voice-samples
       # Auto-unload model after N minutes of inactivity to free VRAM (0=disabled)
-      # 0: Das Modell bleibt dauerhaft im VRAM (~5 GB). Neben gemma4:e2b (~2 GB)
-      # ist auf der 12-GB-Karte genug Platz, und so gibt es keinen Kaltstart.
-      - TTS_INACTIVITY_TIMEOUT_MINUTES=0
+      #
+      # Stand vorher auf 0, damit es keinen Kaltstart gibt. Das kostet dauerhaft
+      # mehr, als /health vermuten laesst: dort stehen 2,83 GB, am Prozess gemessen
+      # sind es 3658 MiB, denn /health zaehlt CUDA-Kontext und Allokator nicht mit.
+      # Entladen laesst nur den Kontext stehen, 362 MiB. Es werden also 3,2 GB frei.
+      #
+      # Preis ist der erste Satz nach einer Pause. Durch den Owic-Router gemessen,
+      # 44 Zeichen: warm 0,52 bis 0,61 s, kalt 3,60 s. So billig, weil die
+      # kompilierten Graphen aus dem Cache-Volume kommen und nicht neu gebaut
+      # werden. Kein Rueckfall auf Piper, der Router wartet das mit
+      # OWIC_QWEN_TIMEOUT=240 aus und sein Log zeigt auch fuer die kalte Anfrage
+      # "qwen Kyle".
+      #
+      # 10 Minuten: lang genug, dass ein Gespraech nicht hineinlaeuft, kurz genug,
+      # dass das VRAM im Alltag die meiste Zeit frei ist.
+      - TTS_INACTIVITY_TIMEOUT_MINUTES=10
       # When using device_ids filter, the GPU appears as device 0 inside container
       - CUDA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
